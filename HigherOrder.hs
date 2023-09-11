@@ -8,6 +8,7 @@ date: September 4, 2023
 module HigherOrder where
 
 import Data.Char
+import Foreign (toBool)
 import Test.HUnit
 import Prelude hiding (filter, foldr, map, pred, product, sum)
 
@@ -42,7 +43,7 @@ Or you can make a list containing the functions
 -}
 
 funs :: [Int -> Int]
-funs = undefined
+funs = [plus1, minus1]
 
 {-
 Taking Functions as Input
@@ -101,7 +102,7 @@ Haskell and almost every other language that you have seen.
 
 What is great about Haskell is that it is designed so that you don't have to
 worry about the evaluation order.  The substitution model of evaluation is
-*always* correct, and you can replace equals-for-equals *anywhere* in a
+\*always* correct, and you can replace equals-for-equals *anywhere* in a
 Haskell program to figure out its value. What this means is that you can
 could *also* understand the evaluation of `doTwice` using a more
 standard order of evaluation
@@ -143,7 +144,7 @@ controlled way.
 Returning Functions as Output
 -----------------------------
 
-IXt can be useful to write functions that return new
+It can be useful to write functions that return new
 functions as output. For example, rather than writing different
 versions `plus1`, `plus2`, `plus3`, *etc.* we can write a
 single function `plusn` as
@@ -172,12 +173,14 @@ Note the types of the above are `Int -> Int`.  That is, `plus10` and
 -}
 
 -- >>> plus10 3
+-- 13
 
 {-
 
 -}
 
 -- >>> plusn 10 3
+-- 13
 
 {-
 Partial Application
@@ -262,8 +265,8 @@ arguments before substituting them into the body of a defined function.
 
     doTwicePlus20 0 == doTwice (plus 20) 0        {- unfold doTwice -}
                     == (plus 20) ((plus 20) 0)
-                    ... undefined (fill this part in) ...
-                    == 20 + 20 + 0
+                    == 20 + ((plus 20) 0)
+                    == 20 + 20
                     == 40
 
 Note that with partial application, that the order of arguments to the function
@@ -355,7 +358,7 @@ Infix Operations and Sections
 -----------------------------
 
 In order to improve readability, Haskell allows you to use certain functions as
-*infix* operators: an infix operator is a function whose name is made of
+\*infix* operators: an infix operator is a function whose name is made of
 symbols. Wrapping it in parentheses makes it a regular identifier.
 My personal favorite infix operator is the application function,
 defined like this:
@@ -425,7 +428,7 @@ following test passes.
 -}
 
 singleton :: a -> [a]
-singleton = undefined
+singleton = (: [])
 
 singletonTest :: Test
 singletonTest = singleton True ~?= [True]
@@ -491,7 +494,7 @@ ex1 x y = doTwice doTwice x y
 -}
 
 ex1Test :: Test
-ex1Test = undefined
+ex1Test = ex1 plus1 1 ~?= 5
 
 {-
 Polymorphic Data Structures
@@ -648,14 +651,14 @@ map f (x : xs) = f x : map f xs
 The type of `map` tells us exactly what it does: it takes an `a -> b`
 transformer and list of `a` values, and transforms each `a` value to return
 a list of `b` values.  We can now safely reuse the pattern, by
-*instantiating* the transformer with different specific operations.
+\*instantiating* the transformer with different specific operations.
 -}
 
 toUpperString' :: String -> String
 toUpperString' xs = map toUpper xs
 
 shiftPoly' :: XY -> Polygon -> Polygon
-shiftPoly' d = undefined
+shiftPoly' d = map (shiftXY d) -- note the parentheses here, i.e., (\x -> shiftXY d x)
 
 {-
 Much better.  But let's make sure our refactoring didn't break anything!
@@ -701,7 +704,7 @@ We can write this more cleanly with map, of course:
 -}
 
 listIncr' :: [Int] -> [Int]
-listIncr' = undefined
+listIncr' = map (+ 1) -- (1 +), (\x -> x + 1)
 
 {-
 Computation Pattern: Folding
@@ -778,8 +781,15 @@ from our list-length function?
     len (x:xs) = 1 + len xs
 -}
 
-len' :: [a] -> Int
-len' = undefined
+len' :: forall a. [a] -> Int
+len' = foldr f b
+  where
+    f :: a -> Int -> Int
+    f _ x = x + 1
+    b :: Int
+    b = 0
+
+-- foldr (\ _ x -> x + 1) 0
 
 {-
 Once you have defined `len` in this way, see if you can trace how it
@@ -796,7 +806,7 @@ Or, how would you use foldr to eliminate the recursion from this?
 
 factorial :: Int -> Int
 factorial 0 = 1
-factorial n = n * factorial (n -1)
+factorial n = n * factorial (n - 1)
 
 factorial' :: Int -> Int
 factorial' n = undefined
@@ -824,7 +834,19 @@ testFilter =
 Can we implement filter using foldr?  Sure!
 -}
 
-filter pred = undefined
+filter pred [] = []
+filter pred (x : xs) =
+  if pred x
+    then x : filter pred xs
+    else filter pred xs
+
+filter' :: forall a b. (a -> Bool) -> [a] -> [a]
+filter' pred = foldr f b
+  where
+    f :: a -> [a] -> [a]
+    f x ys = if pred x then x : ys else ys
+    b :: [a]
+    b = []
 
 runTests :: IO Counts
 runTests = runTestTT $ TestList [testMap, testFoldr, testFilter]
@@ -848,7 +870,7 @@ and worse, there is potential for making silly off-by-one type errors
 if you re-jigger the basic strategy every time.
 
 As an added bonus, it can be quite useful and profitable to
-*parallelize* and *distribute* the computation patterns (like `map`
+\*parallelize* and *distribute* the computation patterns (like `map`
 and `foldr`) in just one place, thereby allowing arbitrary hundreds or
 thousands of instances to benefit in a single shot! Haskell doesn't
 do this out of the box, but these ideas readily translate to languages
